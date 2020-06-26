@@ -1,0 +1,393 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<title>AndroidX CPU Benchmark Visualizer</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/0.5.7/chartjs-plugin-annotation.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/0.7.7/chartjs-plugin-zoom.min.js"></script>
+	<style>
+		canvas{
+			-moz-user-select: none;
+			-webkit-user-select: none;
+			-ms-user-select: none;
+		}
+	</style>
+	<script>
+	
+		function transparentize(color, opacity) {
+			var alpha = opacity === undefined ? 0.5 : 1 - opacity;
+			return Color(color).alpha(alpha).rgbString();
+		}
+		
+		function drawChart(canvas, title, chartData) {
+			
+			var data = {
+				labels: generateHorizontalLabels(),
+				datasets: chartData.datasets
+			};
+
+			var options = {
+				responsive: true,
+				title: {
+					display: true,
+					text: title
+				},
+				tooltips: {
+					mode: 'index',
+					intersect: false,
+				},
+				hover: {
+					mode: 'nearest',
+					intersect: true
+				},
+				scales: {
+					yAxes: [{
+						display: true,
+						stacked: false,
+						scaleLabel: {
+							display: true,
+							labelString: 'Nanoseconds'
+						}
+					}]
+				},
+				annotation: {
+					annotations: chartData.annotations
+				},
+				plugins: {
+					zoom: {
+						// Container for pan options
+						pan: {
+							// Boolean to enable panning
+							enabled: true,
+
+							// Panning directions. Remove the appropriate direction to disable 
+							// Eg. 'y' would only allow panning in the y direction
+							mode: 'xy'
+						},
+
+						// Container for zoom options
+						zoom: {
+							// Boolean to enable zooming
+							enabled: true,
+
+							// Zooming directions. Remove the appropriate direction to disable 
+							// Eg. 'y' would only allow zooming in the y direction
+							mode: 'xy',
+						}
+					}
+				}
+			};
+
+			var chart = new Chart(canvas, {
+				type: 'line', // line, bar
+				data: data,
+				options: options
+			});
+
+		}
+
+		var benchmarks;
+
+		function getBenchmark(name) {
+			for (benchmark of benchmarks.benchmarks) {
+				if (benchmark.name === name) {
+					return benchmark;
+				}
+			}
+		}
+		
+		
+		var horizontalLabelCount = 50;
+		var horizontalLabels = [];
+		function generateHorizontalLabels() {
+			if (horizontalLabelCount !== horizontalLabels.length) {
+				horizontalLabels = [];
+				for (var i = 1; i <= horizontalLabelCount; i++) {
+					horizontalLabels.push('' + i);
+				}
+			}
+			return horizontalLabels;
+		}
+		
+		function increaseHorizontalLabelCount() {
+			if (horizontalLabelCount === 55) {
+				// max count reached
+				return;
+			}
+			horizontalLabelCount = horizontalLabelCount + 5;
+			document.getElementById('horizontalLabelCount').innerText = horizontalLabelCount;
+			Chart.helpers.each(Chart.instances, function(chart) {
+				chart.data.labels = generateHorizontalLabels();
+				chart.update();
+			});
+		}
+		
+		function decreaseHorizontalLabelCount() {
+			if (horizontalLabelCount === 5) {
+				// min count reached
+				return;
+			}
+			horizontalLabelCount = horizontalLabelCount - 5;
+			document.getElementById('horizontalLabelCount').innerText = horizontalLabelCount;
+			Chart.helpers.each(Chart.instances, function(chart) {
+				chart.data.labels = generateHorizontalLabels();
+				chart.update();
+			});
+		}
+
+		var smoothnessLevelIndex = 4;
+		var smoothnessLevels = [ 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ];
+		function getSmoothnessLevel() {
+			return smoothnessLevels[smoothnessLevelIndex];
+		}
+		
+		function increaseSmoothnessLevel() {
+			if (smoothnessLevelIndex === smoothnessLevels.length - 1) {
+				// max index reached
+				return;
+			}
+			smoothnessLevelIndex = smoothnessLevelIndex + 1;
+			document.getElementById('smoothnessLevel').innerText = smoothnessLevelIndex;
+			drawCharts();
+		}
+		
+		function decreaseSmoothnessLevel() {
+			if (smoothnessLevelIndex === 0) {
+				// min index reached
+				return;
+			}
+			smoothnessLevelIndex = smoothnessLevelIndex - 1;
+			document.getElementById('smoothnessLevel').innerText = smoothnessLevelIndex;
+			drawCharts();
+		}
+		
+		var lineType = 'line';
+		function getLineType() {
+			return lineType;
+		}
+		function toggleLineType() {
+			if (lineType === 'line') {
+				lineType = 'bar';
+			} else if (lineType === 'bar') {
+				lineType = 'line';
+			}
+			drawCharts();
+		}
+		
+		var fill = false;
+		function isFill() {
+			return fill;
+		}
+		function toggleFill() {
+			fill = !fill;
+			drawCharts();
+		}
+		
+		function createChartData(filters) {
+			var chartData = {
+				datasets: [],
+				annotations: []
+			};
+			var i = 0;
+			for (filter of filters) {
+				i = i + 1;
+				var benchmark = getBenchmark(filter.name);
+				chartData.datasets.push({
+					type: getLineType(), // line, bar
+					label: filter.label,
+					fill: isFill(),
+					backgroundColor: filter.color,
+					borderColor: filter.color,
+					//borderDash: [5, 5],
+					lineTension: getSmoothnessLevel(),
+					data: benchmark.metrics.timeNs.runs
+				});
+				chartData.annotations.push({ // ref: https://github.com/chartjs/chartjs-plugin-annotation
+					type: 'line',
+					mode: 'horizontal',
+					scaleID: 'y-axis-0',
+					value: benchmark.metrics.timeNs.median,
+					borderColor: filter.color,
+					borderWidth: 1,
+					borderDash: [5, 5],
+					label: {
+						enabled: true,
+						backgroundColor: transparentize(filter.color), //default 'rgba(0,0,0,0.8)'
+						content: 'Median-' + i,
+						position: "right"
+					}
+				});
+			}
+
+			return chartData;
+		}
+
+		function onFileInputChange(event) {
+			var reader = new FileReader();
+			reader.onload = onFileLoaded;
+			reader.readAsText(event.target.files[0]);
+		}
+
+		function onFileLoaded(event){
+			benchmarks = JSON.parse(event.target.result);
+			drawCharts();
+		}
+		
+		function clearCanvas(canvasId) {
+			var canvas = document.getElementById(canvasId);
+			var ctx = canvas.getContext('2d');
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+		}
+		
+		function clearAllCharts() {
+			Chart.helpers.each(Chart.instances, function(chart) {
+				chart.destroy();
+			});
+		}
+		
+		function drawCharts() {
+			
+			clearAllCharts();
+			
+			var chartData;
+			var canvasCounter = 0;
+			
+			chartData = createChartData([{
+				name: "EMULATOR_UNLOCKED_inflateBetTypeLayoutV2",
+				label: "Constraint Layout (V2)",
+				color: "#FF0000"
+			}, {
+				name: "EMULATOR_UNLOCKED_inflateBetTypeLayoutV1",
+				label: "Other Layout (V1)",
+				color: "#0000FF"
+			}]);
+			if (chartData.datasets.length !== 0) {
+				canvasCounter = canvasCounter + 1;
+				drawChart("canvas" + canvasCounter, "Sev Bet Type Inflate Benchmark", chartData);
+			}
+			
+			chartData = createChartData([{
+				name: "EMULATOR_UNLOCKED_inflateMarketlinesLayoutV2",
+				label: "Constraint Layout (V2)",
+				color: "#FF0000"
+			}, {
+				name: "EMULATOR_UNLOCKED_inflateMarketlinesLayoutV1",
+				label: "Other Layout (V1)",
+				color: "#0000FF"
+			}]);
+			if (chartData.datasets.length !== 0) {
+				canvasCounter = canvasCounter + 1;
+				drawChart("canvas" + canvasCounter, "Sev Marketlines Inflate Benchmark", chartData);
+			}
+			
+			chartData = createChartData([{
+				name: "EMULATOR_UNLOCKED_inflateWagerLayoutV2",
+				label: "Constraint Layout (V2)",
+				color: "#FF0000"
+			}, {
+				name: "EMULATOR_UNLOCKED_inflateWagerLayoutV1",
+				label: "Other Layout (V1)",
+				color: "#0000FF"
+			}]);
+			if (chartData.datasets.length !== 0) {
+				canvasCounter = canvasCounter + 1;
+				drawChart("canvas" + canvasCounter, "Sev Wager Inflate Benchmark", chartData);
+			}
+			
+			chartData = createChartData([{
+				name: "EMULATOR_UNLOCKED_scrollV2",
+				label: "Scroll (V2)",
+				color: "#FF0000"
+			}, {
+				name: "EMULATOR_UNLOCKED_scrollV1",
+				label: "Scroll (V1)",
+				color: "#0000FF"
+			}]);
+			if (chartData.datasets.length !== 0) {
+				canvasCounter = canvasCounter + 1;
+				drawChart("canvas" + canvasCounter, "Sev Adapter Scroll Benchmark", chartData);
+			}
+		}
+
+		window.onload = function () {
+			
+			document.getElementById('file').addEventListener('change', onFileInputChange);
+			document.getElementById('horizontalLabelCount').innerText = horizontalLabelCount;
+			document.getElementById('smoothnessLevel').innerText = smoothnessLevelIndex;
+
+		}
+	</script>
+</head>
+<body style="margin: 0; background: wheat;">
+	<div style="width: 1450px;max-width: 1450px;margin: 0 auto; background: antiquewhite;">
+		<div style="width: 1428px; height: 144px; background: lightslategray; padding: 10px; position: fixed; border: 1px solid gray;">
+			<span style="font-size:xx-large">AndroidX Benchmark Visualizer</span>
+			<br />
+			<input style="margin-top:15px;" id="file" type="file"/>
+			<br /><br />
+			<table>
+				<tr>
+					<td>
+						<button onclick="increaseHorizontalLabelCount()">+</button>
+						<button onclick="decreaseHorizontalLabelCount()">-</button>
+						Horizontal Points : <span id="horizontalLabelCount"></span>
+						<br />
+						<button style="margin-top:5px" onclick="increaseSmoothnessLevel()">+</button>
+						<button onclick="decreaseSmoothnessLevel()">-</button>
+						Line Smoothness : <span id="smoothnessLevel"></span>
+					</td>
+					<td style="padding-left: 50px;">
+						<input type="checkbox" id="cb1" name="cb1" onclick="toggleFill()">
+						<label for="cb1"> Fill Background</label>
+						<br />
+						<input type="checkbox" id="cb2" name="cb2" onclick="toggleLineType()">
+						<label for="cb2"> Bar Chart</label>
+					</td>
+				</tr>
+			</table>
+		</div>
+		<br />
+		<div style="width: 100%;  margin: 0 auto; margin-top: 144px;">
+			<canvas id="canvas1" height="300" width="0"></canvas>
+		</div>
+		<br /><br />
+		<div style="width: 100%;  margin: 0 auto;">
+			<canvas id="canvas2" height="300" width="0"></canvas>
+		</div>
+		<br /><br />
+		<div style="width: 100%;  margin: 0 auto;">
+			<canvas id="canvas3" height="300" width="0"></canvas>
+		</div>
+		<br /><br />
+		<div style="width: 100%;  margin: 0 auto;">
+			<div style="width: 3000px, height: 300px">
+				<canvas id="canvas4" height="300" width="0"></canvas>
+			</div>
+		</div>
+		<div style="width: 100%;  margin: 0 auto;">
+			<canvas id="canvas5" height="300" width="0"></canvas>
+		</div>
+		<br /><br />
+		<div style="width: 100%;  margin: 0 auto;">
+			<canvas id="canvas6" height="300" width="0"></canvas>
+		</div>
+		<br /><br />
+		<div style="width: 100%;  margin: 0 auto;">
+			<canvas id="canvas7" height="300" width="0"></canvas>
+		</div>
+		<br /><br />
+		<div style="width: 100%;  margin: 0 auto;">
+			<canvas id="canvas8" height="300" width="0"></canvas>
+		</div>
+		<br /><br />
+		<div style="width: 100%;  margin: 0 auto;">
+			<canvas id="canvas9" height="300" width="0"></canvas>
+		</div>
+		<br /><br />
+		<br /><br />
+		<br /><br />
+		<br /><br />
+		<br /><br />
+	</div>
+</body>
+</html>
