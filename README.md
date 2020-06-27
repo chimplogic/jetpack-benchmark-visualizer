@@ -1,4 +1,4 @@
-<b>AndroidX Benchmark Visualizer</b>
+<b>Jetpack Benchmark Visualizer</b>
 
 Draw charts using benchmark data after testing your android code with <a href="https://developer.android.com/studio/profile/benchmark">AndroidX Jetpack Benchmark</a>.
 
